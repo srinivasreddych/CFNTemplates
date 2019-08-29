@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+    PublicSubnetIds:
+      Description: List of Subnets to deploy the ELB into
+      Type: List<AWS::EC2::Subnet::Id>
+    
+    VpcId:
+      Description: VPC
+      Type: String
+Resources:
+  EcsElasticLoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+       Subnets:
+        - !Select ['0', !Ref 'PublicSubnetIds']
+        - !Select ['1', !Ref 'PublicSubnetIds']
+       Type: network
+
+  LoadBalancerListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref EcsElasticLoadBalancer
+      Port: 80
+      Protocol: TCP
+
+  TargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: !Join 
+        - '-'
+        - - !Ref 'AWS::StackName'
+          - TargetGroup
+      Port: 80
+      Protocol: TCP
+      VpcId: !Ref VpcId
+    DependsOn:
+      - EcsElasticLoadBalancer
+
+  UnhealthyHostCountAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      AlarmName: "UnhealthyHostCountAlarm"
+      AlarmDescription: "Alarm if there are any unhealthy hosts longer than the typical deployment time"
+      Namespace: AWS/NetworkELB
+      MetricName: UnHealthyHostCount
+      Dimensions:
+        - Name: TargetGroup
+          Value: !GetAtt [ TargetGroup, TargetGroupFullName ]
+        - Name: LoadBalancer
+          Value: !GetAtt [ LoadBalancer, LoadBalancerFullName ]
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 5
+      Threshold: 1
+      ComparisonOperator: "GreaterThanThreshold"
+      TreatMissingData: "notBreaching"
