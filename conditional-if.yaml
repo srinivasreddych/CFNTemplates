@@ -1,0 +1,87 @@
+Description: >
+  This is an example of a long running ECS service that serves a JSON API of products.
+
+Parameters:
+
+  EnvKey:
+    Description: Enter EnvKeys in a string format
+    Type: String
+    Default: "EnvName1, EnvName2, EnvName3"
+  
+  EnvValue:
+    Description: Enter EnvValues in a string format
+    Type: String
+    Default: "EnvVal1, EnvVal2, EnvVal3"
+
+  SecretName:
+    Description: Enter SecretNames in a string format
+    Type: String
+    Default: "Secret1, Secret2, Secret3"
+
+  SecretKeyARNs:
+    Description: Enter SecretValues in a string format
+    Type: String
+    Default: "arn:aws:secretsmanager:us-east-1:123456789:secret:MyRDSSecret-4ccWck1, arn:aws:secretsmanager:us-east-1:123456789:secret:MyRDSSecret-4ccWck2, arn:aws:secretsmanager:us-east-1:123456789:secret:MyRDSSecret-4ccWck3"
+  
+  UsingSecrets:
+    Description: Do you want to use Secrets or no?
+    Type: String
+    AllowedValues: 
+      - true
+      - false
+
+  UsingEnvironmentVariables:
+    Description: Do you want to use EnvironmentVariables or no?
+    Type: String
+    AllowedValues: 
+      - true
+      - false
+
+Conditions: 
+  UsingSecrets: !Equals [ !Ref UsingSecrets, true ]
+  UsingEnvironmentVariables: !Equals [ !Ref UsingEnvironmentVariables, true ]
+
+Resources:
+  
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: product-service
+      ContainerDefinitions:
+        - Name: product-service
+          Essential: true
+          Image: 123456789.dkr.ecr.us-east-1.amazonaws.com/ecs-refarch-cloudformation/product-service:1.0.0
+          Memory: 128
+          PortMappings:
+            - ContainerPort: 8001
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+          Secrets:
+            !If
+              - UsingSecrets
+              - - Name: !Select [0, !Split [",", !Ref SecretName]]
+                  ValueFrom: !Select [0, !Split [",", !Ref SecretKeyARNs]]
+                - Name: !Select [1, !Split [",", !Ref SecretName]]
+                  ValueFrom: !Select [1, !Split [",", !Ref SecretName]]
+                - Name: !Select [2, !Split [",", !Ref SecretName]]
+                  ValueFrom: !Select [2, !Split [",", !Ref SecretName]]
+              - !Ref 'AWS::NoValue'
+          Environment:
+            !If
+              - UsingEnvironmentVariables
+              - - Name:  !Select [0, !Split [",", !Ref EnvKey]]
+                  Value: !Select [0, !Split [",", !Ref EnvValue]]
+                - Name: !Select [1, !Split [",", !Ref EnvKey]]
+                  Value: !Select [1, !Split [",", !Ref EnvValue]]
+                - Name: !Select [2, !Split [",", !Ref EnvKey]]
+                  Value: !Select [2, !Split [",", !Ref EnvValue]]
+              - !Ref 'AWS::NoValue'
+
+  CloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Ref AWS::StackName
+      RetentionInDays: 365
