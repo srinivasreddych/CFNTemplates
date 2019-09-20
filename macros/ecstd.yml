@@ -1,0 +1,86 @@
+Description: >
+  This is an example of a long running ECS service that serves a JSON API of products.
+
+Parameters:
+  EnvKey:
+    Description: Do you want to use Secrets or no?
+    Type: CommaDelimitedList
+    Default: "EnvName1, EnvName2,EnvName3 "
+  
+  EnvValue:
+    Description: Do you want to use Secrets or no?
+    Type: CommaDelimitedList
+    Default: "EnvVal1, EnvVal2, EnvVal3"
+
+  SecretName:
+    Description: Do you want to use Secrets or no?
+    Type: CommaDelimitedList
+    Default: "Secret1, Secret2, Secret3"
+
+  SecretKeyARNs:
+    Description: Do you want to use Secrets or no?
+    Type: CommaDelimitedList
+    Default: " arn:aws:secretsmanager:us-east-1:123456789:secret:MyRDSSecret1-Fdcv06, arn:aws:secretsmanager:us-east-1:123456789:secret:MyRDSSecret1-Fdcv06, arn:aws:secretsmanager:us-east-1:123456789:secret:MyRDSSecret1-Fdcv06"
+
+  UsingSecrets:
+    Description: Do you want to use Secrets or no?
+    Type: String
+    AllowedValues: 
+      - true
+      - false
+
+  UsingEnvironmentVariables:
+    Description: Do you want to use EnvironmentVariables or no?
+    Type: String
+    AllowedValues: 
+      - true
+      - false
+
+Conditions: 
+  UsingSecrets: !Equals [ !Ref UsingSecrets, true ]
+  UsingEnvironmentVariables: !Equals [ !Ref UsingEnvironmentVariables, true ]
+
+Resources:
+  
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: product-service
+      ExecutionRoleArn: !If [UsingSecrets, "arn:aws:iam::063114128614:role/ecsTaskExecutionRole", !Ref 'AWS::NoValue']
+      ContainerDefinitions:
+        - Name: product-service
+          Essential: true
+          Image: 275396840892.dkr.ecr.us-east-1.amazonaws.com/ecs-refarch-cloudformation/product-service:1.0.0
+          Memory: 128
+          PortMappings:
+            - ContainerPort: 8001
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref CloudWatchLogsGroup
+              awslogs-region: !Ref AWS::Region
+          Environment:
+            !If
+              - UsingEnvironmentVariables
+              - 'Fn::Transform':
+                  - Name: ExpansionEnvVars
+                    Parameters:
+                      EnvKey: !Ref EnvKey
+                      EnvValue: !Ref EnvValue
+                      isEnvironment: "yes"
+              - !Ref 'AWS::NoValue'
+          Secrets:
+            !If
+              - UsingSecrets
+              - 'Fn::Transform':
+                  - Name: ExpansionSecrets
+                    Parameters:
+                      SecretName: !Ref SecretName
+                      SecretKeyARNs: !Ref SecretKeyARNs
+                      isSecrets: "yes"
+              - !Ref 'AWS::NoValue'
+  CloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Ref AWS::StackName
+      RetentionInDays: 365

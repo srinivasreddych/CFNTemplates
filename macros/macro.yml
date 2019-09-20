@@ -1,0 +1,113 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  TransformExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: ['logs:*']
+                Resource: 'arn:aws:logs:*:*:*'
+              - Effect: Allow
+                Action: ['*']
+                Resource: '*'
+
+  TransformFunctionSecrets:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+            import traceback
+            import boto3
+            import logging
+            def handler(event, context):
+                print (event)
+                response = {
+                    "requestId": event["requestId"],
+                    "status": "success"}
+    
+                SecretName = event['params']['SecretName']
+                SecretKeyARNs= event['params']['SecretKeyARNs'] 
+                isSecrets=event['params']['isSecrets']
+                
+                if len(SecretName) == len(SecretKeyARNs) and isSecrets == "yes":
+                  secrets=[]
+                  secrets=[{"Name":SecretName[i], "ValueFrom":SecretKeyARNs[i]} for i in range(0, len(SecretName))]
+                  print (secrets)
+                  response["fragment"] = secrets
+                else:
+                    response["status"] = "failure"
+                return response
+      Handler: index.handler
+      Runtime: python3.6
+      Role: !GetAtt TransformExecutionRole.Arn
+
+  TransformFunctionEnvVars:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+            import traceback
+            import boto3
+            import logging
+            def handler(event, context):
+                print (event)
+                response = {
+                    "requestId": event["requestId"],
+                    "status": "success"}
+                
+                EnvKey = event['params']['EnvKey']
+                EnvValue= event['params']['EnvValue'] 
+                isenv=event['params']['isEnvironment']
+
+                if len(EnvKey) == len(EnvValue) and isenv == "yes":
+                  envvars=[]
+                  envvars=[{"Name":EnvKey[i], "Value":EnvValue[i]} for i in range(0, len(EnvKey))]
+                  print (envvars)
+                  response["fragment"] = envvars
+                else:
+                    response["status"] = "failure"
+                return response
+      Handler: index.handler
+      Runtime: python3.6
+      Role: !GetAtt TransformExecutionRole.Arn
+
+  TransformFunctionSecretsPermissions:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt TransformFunctionSecrets.Arn
+      Principal: 'cloudformation.amazonaws.com'
+
+  TransformFunctionEnVarsPermissions:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !GetAtt TransformFunctionEnvVars.Arn
+      Principal: 'cloudformation.amazonaws.com'
+
+  TransformSecrets:
+    Type: AWS::CloudFormation::Macro
+    Properties:
+      Name: 'ExpansionSecrets'
+      Description: Check for the existence of export variables
+      FunctionName: !GetAtt TransformFunctionSecrets.Arn
+
+  TransformEnvVars:
+    Type: AWS::CloudFormation::Macro
+    Properties:
+      Name: 'ExpansionEnvVars'
+      Description: Check for the existence of export variables
+      FunctionName: !GetAtt TransformFunctionEnvVars.Arn
+  
