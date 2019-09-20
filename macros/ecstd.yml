@@ -46,7 +46,7 @@ Resources:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: product-service
-      ExecutionRoleArn: !If [UsingSecrets, "arn:aws:iam::063114128614:role/ecsTaskExecutionRole", !Ref 'AWS::NoValue']
+      ExecutionRoleArn: !If [UsingSecrets, "arn:aws:iam::123456789:role/ecsTaskExecutionRole", !Ref 'AWS::NoValue']
       ContainerDefinitions:
         - Name: product-service
           Essential: true
